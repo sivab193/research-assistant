@@ -26,6 +26,10 @@ OPENALEX_URL = "https://api.openalex.org/works"
 OPENALEX_API_KEY = os.getenv("OPENALEX_API_KEY", "").strip()
 LM_STUDIO_URL = os.getenv("LM_STUDIO_URL", "http://127.0.0.1:1234/v1").rstrip("/")
 LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "").strip()
+OPENROUTER_URL = os.getenv("OPENROUTER_URL", "https://openrouter.ai/api/v1").rstrip("/")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free").strip()
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "lmstudio").strip().lower()
 MAX_SOURCE_CHARS = int(os.getenv("MAX_SOURCE_CHARS", "70000"))
 
 app = Flask(__name__)
@@ -151,7 +155,7 @@ def extract_pdf(path: Path) -> tuple[dict[str, Any], str]:
     return {"title": title, "authors": authors, "year": year, "abstract": abstract}, full_text
 
 
-def lm_chat(messages: list[dict[str, str]], temperature: float = 0.15) -> str:
+def lm_studio_chat(messages: list[dict[str, str]], temperature: float) -> str:
     try:
         model = LM_STUDIO_MODEL
         if not model:
@@ -182,6 +186,56 @@ def lm_chat(messages: list[dict[str, str]], temperature: float = 0.15) -> str:
         raise RuntimeError("LM Studio returned an unexpected response.") from exc
 
 
+def openrouter_chat(messages: list[dict[str, str]], temperature: float) -> str:
+    if not OPENROUTER_API_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY is missing. Add it to .env before using OpenRouter.")
+    try:
+        response = requests.post(
+            f"{OPENROUTER_URL}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/sivab193/research-assistant",
+                "X-Title": "Atlas Research Assistant",
+            },
+            json={
+                "model": OPENROUTER_MODEL,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": 1200,
+                "stream": False,
+            },
+            timeout=180,
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"].strip()
+    except requests.RequestException as exc:
+        detail = ""
+        if exc.response is not None:
+            try:
+                detail = f" {exc.response.json().get('error', {}).get('message', '')}".rstrip()
+            except (TypeError, ValueError):
+                pass
+        raise RuntimeError(f"OpenRouter request failed.{detail}") from exc
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
+        raise RuntimeError("OpenRouter returned an unexpected response.") from exc
+
+
+def lm_chat(messages: list[dict[str, str]], temperature: float = 0.15) -> str:
+    if LLM_PROVIDER == "openrouter":
+        return openrouter_chat(messages, temperature)
+    if LLM_PROVIDER == "lmstudio":
+        return lm_studio_chat(messages, temperature)
+    if LLM_PROVIDER == "auto":
+        try:
+            return lm_studio_chat(messages, temperature)
+        except RuntimeError:
+            if OPENROUTER_API_KEY:
+                return openrouter_chat(messages, temperature)
+            raise
+    raise RuntimeError("LLM_PROVIDER must be 'lmstudio', 'openrouter', or 'auto'.")
+
+
 def paper_source(row: sqlite3.Row) -> tuple[str, str]:
     if row["full_text"]:
         return row["full_text"][:MAX_SOURCE_CHARS], "full PDF text"
@@ -210,17 +264,28 @@ def index():
 
 @app.get("/api/config")
 def config():
-    return jsonify({"lm_studio_url": LM_STUDIO_URL, "model": LM_STUDIO_MODEL or "auto-detect"})
+    model = OPENROUTER_MODEL if LLM_PROVIDER == "openrouter" else (LM_STUDIO_MODEL or "auto-detect")
+    return jsonify({"provider": LLM_PROVIDER, "model": model})
 
 
 @app.get("/api/health")
 def health():
     lm_ok = False
-    try:
-        lm_ok = requests.get(f"{LM_STUDIO_URL}/models", timeout=2).ok
-    except requests.RequestException:
-        pass
-    return jsonify({"app": "ok", "lm_studio": lm_ok})
+    active_provider = LLM_PROVIDER
+    if LLM_PROVIDER in {"lmstudio", "auto"}:
+        try:
+            lm_ok = requests.get(f"{LM_STUDIO_URL}/models", timeout=2).ok
+        except requests.RequestException:
+            pass
+    if LLM_PROVIDER == "openrouter":
+        lm_ok = bool(OPENROUTER_API_KEY)
+    elif LLM_PROVIDER == "auto" and not lm_ok and OPENROUTER_API_KEY:
+        lm_ok = True
+        active_provider = "openrouter"
+    elif LLM_PROVIDER == "auto" and lm_ok:
+        active_provider = "lmstudio"
+    model = OPENROUTER_MODEL if active_provider == "openrouter" else (LM_STUDIO_MODEL or "auto-detect")
+    return jsonify({"app": "ok", "llm": lm_ok, "provider": active_provider, "model": model})
 
 
 @app.get("/api/search")
