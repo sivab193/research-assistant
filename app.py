@@ -25,7 +25,7 @@ SEMANTIC_SCHOLAR_URL = "https://api.semanticscholar.org/graph/v1/paper/search"
 OPENALEX_URL = "https://api.openalex.org/works"
 OPENALEX_API_KEY = os.getenv("OPENALEX_API_KEY", "").strip()
 LM_STUDIO_URL = os.getenv("LM_STUDIO_URL", "http://127.0.0.1:1234/v1").rstrip("/")
-LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "local-model")
+LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "").strip()
 MAX_SOURCE_CHARS = int(os.getenv("MAX_SOURCE_CHARS", "70000"))
 
 app = Flask(__name__)
@@ -153,10 +153,18 @@ def extract_pdf(path: Path) -> tuple[dict[str, Any], str]:
 
 def lm_chat(messages: list[dict[str, str]], temperature: float = 0.15) -> str:
     try:
+        model = LM_STUDIO_MODEL
+        if not model:
+            models_response = requests.get(f"{LM_STUDIO_URL}/models", timeout=10)
+            models_response.raise_for_status()
+            loaded_models = models_response.json().get("data", [])
+            if not loaded_models:
+                raise RuntimeError("LM Studio is running, but no chat model is loaded.")
+            model = loaded_models[0]["id"]
         response = requests.post(
             f"{LM_STUDIO_URL}/chat/completions",
             json={
-                "model": LM_STUDIO_MODEL,
+                "model": model,
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": 1200,
@@ -202,7 +210,7 @@ def index():
 
 @app.get("/api/config")
 def config():
-    return jsonify({"lm_studio_url": LM_STUDIO_URL, "model": LM_STUDIO_MODEL})
+    return jsonify({"lm_studio_url": LM_STUDIO_URL, "model": LM_STUDIO_MODEL or "auto-detect"})
 
 
 @app.get("/api/health")
