@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Atlas — AI Research Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <a class="brand" href="#"><span class="brand-mark">A</span><span>Atlas</span></a>
+    <div id="modelStatus" class="status"><span></span> Checking LM Studio…</div>
+  </header>
+  <main>
+    <section class="hero">
+      <p class="eyebrow">YOUR LOCAL RESEARCH WORKSPACE</p>
+      <h1>Find papers. Read deeply.<br><em>Think locally.</em></h1>
+      <p class="lede">Search the scientific literature, build a durable library, and analyze papers with an LLM running privately on your Mac.</p>
+      <form id="searchForm" class="search-bar">
+        <svg viewBox="0 0 24 24"><path d="m21 21-4.4-4.4m2.4-5.1a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"/></svg>
+        <input id="searchInput" placeholder="Search by topic, method, or keyword…" autocomplete="off">
+        <button>Search papers</button>
+      </form>
+    </section>
+
+    <nav class="tabs" aria-label="Workspace sections">
+      <button class="tab active" data-tab="discover">Discover</button>
+      <button class="tab" data-tab="library">My library <span id="libraryCount">0</span></button>
+      <label class="upload-button">Upload PDF<input id="pdfInput" type="file" accept="application/pdf" hidden></label>
+    </nav>
+
+    <section id="discover" class="panel active">
+      <div class="section-heading"><div><p class="eyebrow">SCHOLARLY SEARCH</p><h2 id="resultHeading">Start with a research question</h2></div></div>
+      <div id="searchResults" class="paper-grid empty-state"><div class="empty-icon">⌕</div><h3>The literature is waiting</h3><p>Search above to explore papers across fields and disciplines.</p></div>
+    </section>
+
+    <section id="library" class="panel">
+      <div class="section-heading"><div><p class="eyebrow">SAVED LOCALLY</p><h2>Your research library</h2></div><p>PDFs and metadata persist on this Mac.</p></div>
+      <div id="libraryResults" class="paper-grid"></div>
+    </section>
+  </main>
+
+  <dialog id="readerDialog">
+    <button class="dialog-close" aria-label="Close">×</button>
+    <div class="reader-meta"><p class="eyebrow" id="readerSource"></p><h2 id="readerTitle"></h2><p id="readerAuthors"></p></div>
+    <div class="reader-tabs"><button class="reader-tab active" data-reader="summary">Summary</button><button class="reader-tab" data-reader="ask">Ask the paper</button></div>
+    <div id="summaryPane" class="reader-pane active"><button id="summarizeButton" class="primary wide">Generate grounded summary</button><div id="summaryOutput" class="answer"></div></div>
+    <div id="askPane" class="reader-pane"><div class="question-row"><input id="questionInput" placeholder="What are the paper’s main limitations?"><button id="askButton" class="primary">Ask</button></div><div id="askOutput" class="answer"></div></div>
+  </dialog>
+  <div id="toast" role="status"></div>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
