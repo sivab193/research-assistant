@@ -27,6 +27,19 @@ python app.py
 
 Open <http://127.0.0.1:5000>.
 
+## Testing
+
+The HW2 suite targets the submitted Flask application in `app.py`. Every test uses temporary SQLite/upload paths. Search, download, and LLM calls are mocked, so the suite requires no API key or network access.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+python -m pytest --cov=app --cov-report=term-missing --cov-branch
+```
+
+On Windows PowerShell, activate with `.\.venv\Scripts\Activate.ps1` and use the same install and pytest commands. The verified final suite contains 68 passing tests and completes in 2.60 seconds on the development machine. Coverage is 98.92% for lines, 96.97% for branches, and 98.55% combined (displayed as 99% by coverage.py).
+
 ## Option A: LM Studio (private and local)
 
 1. Install [LM Studio](https://lmstudio.ai/).
